@@ -1,0 +1,246 @@
+
+ //@version=5
+indicator("Supply & Demand Zones", overlay=true, max_boxes_count=500)
+
+// Settings
+showDemand = input.bool(true, "Show Demand Zones")
+showSupply = input.bool(true, "Show Supply Zones")
+zoneWidth = input.int(20, "Zone Width (Candles)", minval=1, maxval=500)
+maxZones = input.int(50, "Maximum Zones Per Type", minval=1, maxval=200)
+
+// Confirmed zones
+var box[] demandZones = array.new_box()
+var box[] supplyZones = array.new_box()
+
+// Pending supply candidates
+var float[] pendingSupplyHighs = array.new_float()
+var float[] pendingSupplyLows = array.new_float()
+var int[] pendingSupplyBars = array.new_int()
+
+// Supply candidates awaiting post-breakout confirmation
+var float[] breakoutSupplyHighs = array.new_float()
+var float[] breakoutSupplyLows = array.new_float()
+var int[] breakoutSupplyBars = array.new_int()
+var int[] breakoutSupplyCandidateBars = array.new_int()
+
+// Pending demand candidates
+var float[] pendingDemandHighs = array.new_float()
+var float[] pendingDemandLows = array.new_float()
+var int[] pendingDemandBars = array.new_int()
+
+// Demand candidates awaiting post-breakout confirmation
+var float[] breakoutDemandHighs = array.new_float()
+var float[] breakoutDemandLows = array.new_float()
+var int[] breakoutDemandBars = array.new_int()
+var int[] breakoutDemandCandidateBars = array.new_int()
+
+// Candle directions
+bullish = close > open
+bearish = close < open
+
+// =====================================================
+// REGISTER CANDIDATES AND APPLY MIRRORED REPLACEMENT RULES
+// =====================================================
+
+if barstate.isconfirmed
+
+    // SUPPLY: bearish candles
+    if showSupply and bearish
+        i = array.size(pendingSupplyHighs) - 1
+
+        while i >= 0
+            oldHigh = array.get(pendingSupplyHighs, i)
+            oldLow = array.get(pendingSupplyLows, i)
+
+            // Replace the old candidate if the new bearish
+            // candle wicks beyond either boundary.
+            wickAbove = high > oldHigh
+            wickBelow = low < oldLow
+
+            // Existing nested-supply rule:
+            // A candle fully inside the old range replaces it.
+            insideOldZone = high <= oldHigh and low >= oldLow
+
+            if wickAbove or wickBelow or insideOldZone
+                array.remove(pendingSupplyHighs, i)
+                array.remove(pendingSupplyLows, i)
+                array.remove(pendingSupplyBars, i)
+
+            i -= 1
+
+        // Add the new supply candidate.
+        array.push(pendingSupplyHighs, high)
+        array.push(pendingSupplyLows, low)
+        array.push(pendingSupplyBars, bar_index)
+
+    // DEMAND: bullish candles
+    if showDemand and bullish
+        i = array.size(pendingDemandHighs) - 1
+
+        while i >= 0
+            oldHigh = array.get(pendingDemandHighs, i)
+            oldLow = array.get(pendingDemandLows, i)
+
+            // Exact mirror of supply replacement:
+            // Replace the old candidate if the new bullish
+            // candle wicks beyond either boundary.
+            wickBelow = low < oldLow
+            wickAbove = high > oldHigh
+
+            // Existing nested-demand rule:
+            // A candle fully inside the old range replaces it.
+            insideOldZone = high <= oldHigh and low >= oldLow
+
+            if wickBelow or wickAbove or insideOldZone
+                array.remove(pendingDemandHighs, i)
+                array.remove(pendingDemandLows, i)
+                array.remove(pendingDemandBars, i)
+
+            i -= 1
+
+        // Add the new demand candidate.
+        array.push(pendingDemandHighs, high)
+        array.push(pendingDemandLows, low)
+        array.push(pendingDemandBars, bar_index)
+
+// =====================================================
+// SUPPLY: WAIT FOR UPSIDE BREAKOUT
+// =====================================================
+
+if barstate.isconfirmed and array.size(pendingSupplyHighs) > 0
+    i = array.size(pendingSupplyHighs) - 1
+
+    while i >= 0
+        candidateHigh = array.get(pendingSupplyHighs, i)
+        candidateLow = array.get(pendingSupplyLows, i)
+        candidateBar = array.get(pendingSupplyBars, i)
+
+        if bar_index > candidateBar
+
+            // Valid breakout trigger: candle closes above supply high.
+            if close > candidateHigh
+                array.push(breakoutSupplyHighs, candidateHigh)
+                array.push(breakoutSupplyLows, candidateLow)
+                array.push(breakoutSupplyBars, bar_index)
+                array.push(breakoutSupplyCandidateBars, candidateBar)
+
+                array.remove(pendingSupplyHighs, i)
+                array.remove(pendingSupplyLows, i)
+                array.remove(pendingSupplyBars, i)
+
+            // Invalidate if price closes below the candidate low first.
+            else if close < candidateLow
+                array.remove(pendingSupplyHighs, i)
+                array.remove(pendingSupplyLows, i)
+                array.remove(pendingSupplyBars, i)
+
+        i -= 1
+
+// =====================================================
+// SUPPLY: POST-BREAKOUT FOLLOW-THROUGH VALIDATION
+// =====================================================
+
+if barstate.isconfirmed and array.size(breakoutSupplyHighs) > 0
+    i = array.size(breakoutSupplyHighs) - 1
+
+    while i >= 0
+        candidateHigh = array.get(breakoutSupplyHighs, i)
+        candidateLow = array.get(breakoutSupplyLows, i)
+        breakoutBar = array.get(breakoutSupplyBars, i)
+        candidateBar = array.get(breakoutSupplyCandidateBars, i)
+
+        if bar_index > breakoutBar
+
+            // VALID: a later candle's entire range is above supply.
+            if low > candidateHigh
+                zone = box.new(candidateBar, candidateHigh, candidateBar + zoneWidth, candidateLow, border_color=color.red, bgcolor=color.new(color.red, 80))
+                array.push(supplyZones, zone)
+
+                if array.size(supplyZones) > maxZones
+                    oldZone = array.shift(supplyZones)
+                    box.delete(oldZone)
+
+                array.remove(breakoutSupplyHighs, i)
+                array.remove(breakoutSupplyLows, i)
+                array.remove(breakoutSupplyBars, i)
+                array.remove(breakoutSupplyCandidateBars, i)
+
+            // INVALID: closes at or below the top before confirmation.
+            else if close <= candidateHigh
+                array.remove(breakoutSupplyHighs, i)
+                array.remove(breakoutSupplyLows, i)
+                array.remove(breakoutSupplyBars, i)
+                array.remove(breakoutSupplyCandidateBars, i)
+
+        i -= 1
+
+// =====================================================
+// DEMAND: WAIT FOR DOWNSIDE BREAKOUT
+// =====================================================
+
+if barstate.isconfirmed and array.size(pendingDemandHighs) > 0
+    i = array.size(pendingDemandHighs) - 1
+
+    while i >= 0
+        candidateHigh = array.get(pendingDemandHighs, i)
+        candidateLow = array.get(pendingDemandLows, i)
+        candidateBar = array.get(pendingDemandBars, i)
+
+        if bar_index > candidateBar
+
+            // Valid breakout trigger: candle closes below demand low.
+            if close < candidateLow
+                array.push(breakoutDemandHighs, candidateHigh)
+                array.push(breakoutDemandLows, candidateLow)
+                array.push(breakoutDemandBars, bar_index)
+                array.push(breakoutDemandCandidateBars, candidateBar)
+
+                array.remove(pendingDemandHighs, i)
+                array.remove(pendingDemandLows, i)
+                array.remove(pendingDemandBars, i)
+
+            // Invalidate if price closes above the candidate high first.
+            else if close > candidateHigh
+                array.remove(pendingDemandHighs, i)
+                array.remove(pendingDemandLows, i)
+                array.remove(pendingDemandBars, i)
+
+        i -= 1
+
+// =====================================================
+// DEMAND: POST-BREAKOUT FOLLOW-THROUGH VALIDATION
+// =====================================================
+
+if barstate.isconfirmed and array.size(breakoutDemandLows) > 0
+    i = array.size(breakoutDemandLows) - 1
+
+    while i >= 0
+        candidateHigh = array.get(breakoutDemandHighs, i)
+        candidateLow = array.get(breakoutDemandLows, i)
+        breakoutBar = array.get(breakoutDemandBars, i)
+        candidateBar = array.get(breakoutDemandCandidateBars, i)
+
+        if bar_index > breakoutBar
+
+            // VALID: a later candle's entire range is below demand.
+            if high < candidateLow
+                zone = box.new(candidateBar, candidateHigh, candidateBar + zoneWidth, candidateLow, border_color=color.green, bgcolor=color.new(color.green, 80))
+                array.push(demandZones, zone)
+
+                if array.size(demandZones) > maxZones
+                    oldZone = array.shift(demandZones)
+                    box.delete(oldZone)
+
+                array.remove(breakoutDemandHighs, i)
+                array.remove(breakoutDemandLows, i)
+                array.remove(breakoutDemandBars, i)
+                array.remove(breakoutDemandCandidateBars, i)
+
+            // INVALID: closes at or above the bottom before confirmation.
+            else if close >= candidateLow
+                array.remove(breakoutDemandHighs, i)
+                array.remove(breakoutDemandLows, i)
+                array.remove(breakoutDemandBars, i)
+                array.remove(breakoutDemandCandidateBars, i)
+
+        i -= 1
