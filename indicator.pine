@@ -5,16 +5,31 @@ indicator("Supply & Demand Zones", overlay=true, max_boxes_count=500)
 showDemand = input.bool(true, "Show Demand Zones")
 showSupply = input.bool(true, "Show Supply Zones")
 zoneWidth = input.int(20, "Zone Width (Candles)", minval=1, maxval=500)
+maxZones = input.int(50, "Maximum Zones Per Type", minval=1, maxval=200)
 dynamicRectangleSize = input.bool(false, "Dynamic Rectangle Size")
 dynamicTapWindow = input.int(100, "Dynamic Tap Window (Candles)", minval=1, maxval=5000)
-maxZones = input.int(50, "Maximum Zones Per Type", minval=1, maxval=200)
 
-// Confirmed zones
+// Rectangle styling
+demandFillColor = input.color(color.new(color.green, 80), "Demand Fill Color")
+demandBorderColor = input.color(color.green, "Demand Border Color")
+demandBorderStyle = input.string("Solid", "Demand Border Style", options=["Solid", "Dashed", "Dotted"])
+
+supplyFillColor = input.color(color.new(color.red, 80), "Supply Fill Color")
+supplyBorderColor = input.color(color.red, "Supply Border Color")
+supplyBorderStyle = input.string("Solid", "Supply Border Style", options=["Solid", "Dashed", "Dotted"])
+
+// Confirmed zones and their unique IDs
 var box[] demandZones = array.new_box()
+var int[] demandZoneIds = array.new_int()
+
 var box[] supplyZones = array.new_box()
+var int[] supplyZoneIds = array.new_int()
+
+var int nextZoneId = 0
 
 // Dynamic rectangle tracking
 var box[] dynamicBoxes = array.new_box()
+var int[] dynamicZoneIds = array.new_int()
 var int[] dynamicStartBars = array.new_int()
 var int[] dynamicExpiryBars = array.new_int()
 
@@ -40,12 +55,15 @@ var float[] breakoutDemandLows = array.new_float()
 var int[] breakoutDemandBars = array.new_int()
 var int[] breakoutDemandCandidateBars = array.new_int()
 
-// =====================================================
-// DYNAMIC RECTANGLE SIZE
-// =====================================================
+// Candle directions
+bullish = close > open
+bearish = close < open
 
-// Find the first candle that taps a zone.
-// If no tap occurs within the window, keep the fixed width.
+// Convert border style setting to Pine Script line style
+supplyLineStyle = supplyBorderStyle == "Dashed" ? line.style_dashed : supplyBorderStyle == "Dotted" ? line.style_dotted : line.style_solid
+demandLineStyle = demandBorderStyle == "Dashed" ? line.style_dashed : demandBorderStyle == "Dotted" ? line.style_dotted : line.style_solid
+
+// DYNAMIC RECTANGLE SIZE
 if barstate.isconfirmed and dynamicRectangleSize and array.size(dynamicBoxes) > 0
     i = array.size(dynamicBoxes) - 1
 
@@ -58,36 +76,25 @@ if barstate.isconfirmed and dynamicRectangleSize and array.size(dynamicBoxes) > 
             zoneTop = box.get_top(zone)
             zoneBottom = box.get_bottom(zone)
 
-            // A tap occurs when the candle range overlaps the zone.
             tapped = high >= zoneBottom and low <= zoneTop
 
             if tapped
-                // Stop the rectangle at the first tap.
                 box.set_right(zone, bar_index)
 
                 array.remove(dynamicBoxes, i)
+                array.remove(dynamicZoneIds, i)
                 array.remove(dynamicStartBars, i)
                 array.remove(dynamicExpiryBars, i)
-
             else if bar_index >= expiryBar
-                // No tap within the configured window.
-                // Leave the original fixed width unchanged.
                 array.remove(dynamicBoxes, i)
+                array.remove(dynamicZoneIds, i)
                 array.remove(dynamicStartBars, i)
                 array.remove(dynamicExpiryBars, i)
 
         i -= 1
 
-// Candle directions
-bullish = close > open
-bearish = close < open
-
-// =====================================================
 // REGISTER CANDIDATES AND APPLY MIRRORED REPLACEMENT RULES
-// =====================================================
-
 if barstate.isconfirmed
-
     // SUPPLY: bearish candles
     if showSupply and bearish
         i = array.size(pendingSupplyHighs) - 1
@@ -134,10 +141,7 @@ if barstate.isconfirmed
         array.push(pendingDemandLows, low)
         array.push(pendingDemandBars, bar_index)
 
-// =====================================================
 // SUPPLY: WAIT FOR UPSIDE BREAKOUT
-// =====================================================
-
 if barstate.isconfirmed and array.size(pendingSupplyHighs) > 0
     i = array.size(pendingSupplyHighs) - 1
 
@@ -164,10 +168,7 @@ if barstate.isconfirmed and array.size(pendingSupplyHighs) > 0
 
         i -= 1
 
-// =====================================================
 // SUPPLY: POST-BREAKOUT FOLLOW-THROUGH VALIDATION
-// =====================================================
-
 if barstate.isconfirmed and array.size(breakoutSupplyHighs) > 0
     i = array.size(breakoutSupplyHighs) - 1
 
@@ -179,24 +180,34 @@ if barstate.isconfirmed and array.size(breakoutSupplyHighs) > 0
 
         if bar_index > breakoutBar
             if low > candidateHigh
-                zone = box.new(candidateBar, candidateHigh, candidateBar + zoneWidth, candidateLow, border_color=color.red, bgcolor=color.new(color.red, 80))
+                zone = box.new(candidateBar, candidateHigh, candidateBar + zoneWidth, candidateLow, border_color=supplyBorderColor, border_style=supplyLineStyle, bgcolor=supplyFillColor)
+
+                nextZoneId += 1
+                zoneId = nextZoneId
+
                 array.push(supplyZones, zone)
+                array.push(supplyZoneIds, zoneId)
 
                 if dynamicRectangleSize
                     array.push(dynamicBoxes, zone)
+                    array.push(dynamicZoneIds, zoneId)
                     array.push(dynamicStartBars, bar_index)
                     array.push(dynamicExpiryBars, bar_index + dynamicTapWindow)
 
+                // Enforce maximum supply zones and remove matching tracking by ID
                 if array.size(supplyZones) > maxZones
                     oldZone = array.shift(supplyZones)
+                    oldZoneId = array.shift(supplyZoneIds)
 
-                    // Remove the oldest zone from dynamic tracking.
-                    j = array.size(dynamicBoxes) - 1
+                    j = array.size(dynamicZoneIds) - 1
+
                     while j >= 0
-                        if box.get_left(array.get(dynamicBoxes, j)) == box.get_left(oldZone) and box.get_top(array.get(dynamicBoxes, j)) == box.get_top(oldZone) and box.get_bottom(array.get(dynamicBoxes, j)) == box.get_bottom(oldZone)
+                        if array.get(dynamicZoneIds, j) == oldZoneId
                             array.remove(dynamicBoxes, j)
+                            array.remove(dynamicZoneIds, j)
                             array.remove(dynamicStartBars, j)
                             array.remove(dynamicExpiryBars, j)
+
                         j -= 1
 
                     box.delete(oldZone)
@@ -214,10 +225,7 @@ if barstate.isconfirmed and array.size(breakoutSupplyHighs) > 0
 
         i -= 1
 
-// =====================================================
 // DEMAND: WAIT FOR DOWNSIDE BREAKOUT
-// =====================================================
-
 if barstate.isconfirmed and array.size(pendingDemandHighs) > 0
     i = array.size(pendingDemandHighs) - 1
 
@@ -244,10 +252,7 @@ if barstate.isconfirmed and array.size(pendingDemandHighs) > 0
 
         i -= 1
 
-// =====================================================
 // DEMAND: POST-BREAKOUT FOLLOW-THROUGH VALIDATION
-// =====================================================
-
 if barstate.isconfirmed and array.size(breakoutDemandLows) > 0
     i = array.size(breakoutDemandLows) - 1
 
@@ -259,24 +264,34 @@ if barstate.isconfirmed and array.size(breakoutDemandLows) > 0
 
         if bar_index > breakoutBar
             if high < candidateLow
-                zone = box.new(candidateBar, candidateHigh, candidateBar + zoneWidth, candidateLow, border_color=color.green, bgcolor=color.new(color.green, 80))
+                zone = box.new(candidateBar, candidateHigh, candidateBar + zoneWidth, candidateLow, border_color=demandBorderColor, border_style=demandLineStyle, bgcolor=demandFillColor)
+
+                nextZoneId += 1
+                zoneId = nextZoneId
+
                 array.push(demandZones, zone)
+                array.push(demandZoneIds, zoneId)
 
                 if dynamicRectangleSize
                     array.push(dynamicBoxes, zone)
+                    array.push(dynamicZoneIds, zoneId)
                     array.push(dynamicStartBars, bar_index)
                     array.push(dynamicExpiryBars, bar_index + dynamicTapWindow)
 
+                // Enforce maximum demand zones and remove matching tracking by ID
                 if array.size(demandZones) > maxZones
                     oldZone = array.shift(demandZones)
+                    oldZoneId = array.shift(demandZoneIds)
 
-                    // Remove the oldest zone from dynamic tracking.
-                    j = array.size(dynamicBoxes) - 1
+                    j = array.size(dynamicZoneIds) - 1
+
                     while j >= 0
-                        if box.get_left(array.get(dynamicBoxes, j)) == box.get_left(oldZone) and box.get_top(array.get(dynamicBoxes, j)) == box.get_top(oldZone) and box.get_bottom(array.get(dynamicBoxes, j)) == box.get_bottom(oldZone)
+                        if array.get(dynamicZoneIds, j) == oldZoneId
                             array.remove(dynamicBoxes, j)
+                            array.remove(dynamicZoneIds, j)
                             array.remove(dynamicStartBars, j)
                             array.remove(dynamicExpiryBars, j)
+
                         j -= 1
 
                     box.delete(oldZone)
