@@ -1,16 +1,22 @@
-
- //@version=5
+//@version=5
 indicator("Supply & Demand Zones", overlay=true, max_boxes_count=500)
 
 // Settings
 showDemand = input.bool(true, "Show Demand Zones")
 showSupply = input.bool(true, "Show Supply Zones")
 zoneWidth = input.int(20, "Zone Width (Candles)", minval=1, maxval=500)
+dynamicRectangleSize = input.bool(false, "Dynamic Rectangle Size")
+dynamicTapWindow = input.int(100, "Dynamic Tap Window (Candles)", minval=1, maxval=5000)
 maxZones = input.int(50, "Maximum Zones Per Type", minval=1, maxval=200)
 
 // Confirmed zones
 var box[] demandZones = array.new_box()
 var box[] supplyZones = array.new_box()
+
+// Dynamic rectangle tracking
+var box[] dynamicBoxes = array.new_box()
+var int[] dynamicStartBars = array.new_int()
+var int[] dynamicExpiryBars = array.new_int()
 
 // Pending supply candidates
 var float[] pendingSupplyHighs = array.new_float()
@@ -34,6 +40,44 @@ var float[] breakoutDemandLows = array.new_float()
 var int[] breakoutDemandBars = array.new_int()
 var int[] breakoutDemandCandidateBars = array.new_int()
 
+// =====================================================
+// DYNAMIC RECTANGLE SIZE
+// =====================================================
+
+// Find the first candle that taps a zone.
+// If no tap occurs within the window, keep the fixed width.
+if barstate.isconfirmed and dynamicRectangleSize and array.size(dynamicBoxes) > 0
+    i = array.size(dynamicBoxes) - 1
+
+    while i >= 0
+        zone = array.get(dynamicBoxes, i)
+        startBar = array.get(dynamicStartBars, i)
+        expiryBar = array.get(dynamicExpiryBars, i)
+
+        if bar_index > startBar
+            zoneTop = box.get_top(zone)
+            zoneBottom = box.get_bottom(zone)
+
+            // A tap occurs when the candle range overlaps the zone.
+            tapped = high >= zoneBottom and low <= zoneTop
+
+            if tapped
+                // Stop the rectangle at the first tap.
+                box.set_right(zone, bar_index)
+
+                array.remove(dynamicBoxes, i)
+                array.remove(dynamicStartBars, i)
+                array.remove(dynamicExpiryBars, i)
+
+            else if bar_index >= expiryBar
+                // No tap within the configured window.
+                // Leave the original fixed width unchanged.
+                array.remove(dynamicBoxes, i)
+                array.remove(dynamicStartBars, i)
+                array.remove(dynamicExpiryBars, i)
+
+        i -= 1
+
 // Candle directions
 bullish = close > open
 bearish = close < open
@@ -52,13 +96,8 @@ if barstate.isconfirmed
             oldHigh = array.get(pendingSupplyHighs, i)
             oldLow = array.get(pendingSupplyLows, i)
 
-            // Replace the old candidate if the new bearish
-            // candle wicks beyond either boundary.
             wickAbove = high > oldHigh
             wickBelow = low < oldLow
-
-            // Existing nested-supply rule:
-            // A candle fully inside the old range replaces it.
             insideOldZone = high <= oldHigh and low >= oldLow
 
             if wickAbove or wickBelow or insideOldZone
@@ -68,7 +107,6 @@ if barstate.isconfirmed
 
             i -= 1
 
-        // Add the new supply candidate.
         array.push(pendingSupplyHighs, high)
         array.push(pendingSupplyLows, low)
         array.push(pendingSupplyBars, bar_index)
@@ -81,14 +119,8 @@ if barstate.isconfirmed
             oldHigh = array.get(pendingDemandHighs, i)
             oldLow = array.get(pendingDemandLows, i)
 
-            // Exact mirror of supply replacement:
-            // Replace the old candidate if the new bullish
-            // candle wicks beyond either boundary.
             wickBelow = low < oldLow
             wickAbove = high > oldHigh
-
-            // Existing nested-demand rule:
-            // A candle fully inside the old range replaces it.
             insideOldZone = high <= oldHigh and low >= oldLow
 
             if wickBelow or wickAbove or insideOldZone
@@ -98,7 +130,6 @@ if barstate.isconfirmed
 
             i -= 1
 
-        // Add the new demand candidate.
         array.push(pendingDemandHighs, high)
         array.push(pendingDemandLows, low)
         array.push(pendingDemandBars, bar_index)
@@ -116,8 +147,6 @@ if barstate.isconfirmed and array.size(pendingSupplyHighs) > 0
         candidateBar = array.get(pendingSupplyBars, i)
 
         if bar_index > candidateBar
-
-            // Valid breakout trigger: candle closes above supply high.
             if close > candidateHigh
                 array.push(breakoutSupplyHighs, candidateHigh)
                 array.push(breakoutSupplyLows, candidateLow)
@@ -128,7 +157,6 @@ if barstate.isconfirmed and array.size(pendingSupplyHighs) > 0
                 array.remove(pendingSupplyLows, i)
                 array.remove(pendingSupplyBars, i)
 
-            // Invalidate if price closes below the candidate low first.
             else if close < candidateLow
                 array.remove(pendingSupplyHighs, i)
                 array.remove(pendingSupplyLows, i)
@@ -150,14 +178,27 @@ if barstate.isconfirmed and array.size(breakoutSupplyHighs) > 0
         candidateBar = array.get(breakoutSupplyCandidateBars, i)
 
         if bar_index > breakoutBar
-
-            // VALID: a later candle's entire range is above supply.
             if low > candidateHigh
                 zone = box.new(candidateBar, candidateHigh, candidateBar + zoneWidth, candidateLow, border_color=color.red, bgcolor=color.new(color.red, 80))
                 array.push(supplyZones, zone)
 
+                if dynamicRectangleSize
+                    array.push(dynamicBoxes, zone)
+                    array.push(dynamicStartBars, bar_index)
+                    array.push(dynamicExpiryBars, bar_index + dynamicTapWindow)
+
                 if array.size(supplyZones) > maxZones
                     oldZone = array.shift(supplyZones)
+
+                    // Remove the oldest zone from dynamic tracking.
+                    j = array.size(dynamicBoxes) - 1
+                    while j >= 0
+                        if box.get_left(array.get(dynamicBoxes, j)) == box.get_left(oldZone) and box.get_top(array.get(dynamicBoxes, j)) == box.get_top(oldZone) and box.get_bottom(array.get(dynamicBoxes, j)) == box.get_bottom(oldZone)
+                            array.remove(dynamicBoxes, j)
+                            array.remove(dynamicStartBars, j)
+                            array.remove(dynamicExpiryBars, j)
+                        j -= 1
+
                     box.delete(oldZone)
 
                 array.remove(breakoutSupplyHighs, i)
@@ -165,7 +206,6 @@ if barstate.isconfirmed and array.size(breakoutSupplyHighs) > 0
                 array.remove(breakoutSupplyBars, i)
                 array.remove(breakoutSupplyCandidateBars, i)
 
-            // INVALID: closes at or below the top before confirmation.
             else if close <= candidateHigh
                 array.remove(breakoutSupplyHighs, i)
                 array.remove(breakoutSupplyLows, i)
@@ -187,8 +227,6 @@ if barstate.isconfirmed and array.size(pendingDemandHighs) > 0
         candidateBar = array.get(pendingDemandBars, i)
 
         if bar_index > candidateBar
-
-            // Valid breakout trigger: candle closes below demand low.
             if close < candidateLow
                 array.push(breakoutDemandHighs, candidateHigh)
                 array.push(breakoutDemandLows, candidateLow)
@@ -199,7 +237,6 @@ if barstate.isconfirmed and array.size(pendingDemandHighs) > 0
                 array.remove(pendingDemandLows, i)
                 array.remove(pendingDemandBars, i)
 
-            // Invalidate if price closes above the candidate high first.
             else if close > candidateHigh
                 array.remove(pendingDemandHighs, i)
                 array.remove(pendingDemandLows, i)
@@ -221,14 +258,27 @@ if barstate.isconfirmed and array.size(breakoutDemandLows) > 0
         candidateBar = array.get(breakoutDemandCandidateBars, i)
 
         if bar_index > breakoutBar
-
-            // VALID: a later candle's entire range is below demand.
             if high < candidateLow
                 zone = box.new(candidateBar, candidateHigh, candidateBar + zoneWidth, candidateLow, border_color=color.green, bgcolor=color.new(color.green, 80))
                 array.push(demandZones, zone)
 
+                if dynamicRectangleSize
+                    array.push(dynamicBoxes, zone)
+                    array.push(dynamicStartBars, bar_index)
+                    array.push(dynamicExpiryBars, bar_index + dynamicTapWindow)
+
                 if array.size(demandZones) > maxZones
                     oldZone = array.shift(demandZones)
+
+                    // Remove the oldest zone from dynamic tracking.
+                    j = array.size(dynamicBoxes) - 1
+                    while j >= 0
+                        if box.get_left(array.get(dynamicBoxes, j)) == box.get_left(oldZone) and box.get_top(array.get(dynamicBoxes, j)) == box.get_top(oldZone) and box.get_bottom(array.get(dynamicBoxes, j)) == box.get_bottom(oldZone)
+                            array.remove(dynamicBoxes, j)
+                            array.remove(dynamicStartBars, j)
+                            array.remove(dynamicExpiryBars, j)
+                        j -= 1
+
                     box.delete(oldZone)
 
                 array.remove(breakoutDemandHighs, i)
@@ -236,7 +286,6 @@ if barstate.isconfirmed and array.size(breakoutDemandLows) > 0
                 array.remove(breakoutDemandBars, i)
                 array.remove(breakoutDemandCandidateBars, i)
 
-            // INVALID: closes at or above the bottom before confirmation.
             else if close >= candidateLow
                 array.remove(breakoutDemandHighs, i)
                 array.remove(breakoutDemandLows, i)
