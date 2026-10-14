@@ -1,0 +1,113 @@
+// SUPPLY: POST-BREAKOUT FOLLOW-THROUGH VALIDATION
+if barstate.isconfirmed and array.size(breakoutSupplyHighs) > 0
+    i = array.size(breakoutSupplyHighs) - 1
+
+    while i >= 0
+        candidateHigh = array.get(breakoutSupplyHighs, i)
+        candidateLow = array.get(breakoutSupplyLows, i)
+        breakoutBar = array.get(breakoutSupplyBars, i)
+        candidateBar = array.get(breakoutSupplyCandidateBars, i)
+
+        if bar_index > breakoutBar
+            if low > candidateHigh
+                zone = box.new(candidateBar, candidateHigh, candidateBar + zoneWidth, candidateLow, border_color=supplyBorderColor, border_style=supplyLineStyle, bgcolor=supplyFillColor)
+
+                nextZoneId += 1
+                zoneId = nextZoneId
+
+                array.push(supplyZones, zone)
+                array.push(supplyZoneIds, zoneId)
+
+                if dynamicRectangleSize
+                    array.push(dynamicBoxes, zone)
+                    array.push(dynamicZoneIds, zoneId)
+                    array.push(dynamicStartBars, bar_index)
+                    array.push(dynamicExpiryBars, bar_index + dynamicTapWindow)
+
+                // Enforce maximum supply zones and remove matching tracking by ID
+                if array.size(supplyZones) > maxZones
+                    oldZone = array.shift(supplyZones)
+                    oldZoneId = array.shift(supplyZoneIds)
+
+                    j = array.size(dynamicZoneIds) - 1
+
+                    while j >= 0
+                        if array.get(dynamicZoneIds, j) == oldZoneId
+                            array.remove(dynamicBoxes, j)
+                            array.remove(dynamicZoneIds, j)
+                            array.remove(dynamicStartBars, j)
+                            array.remove(dynamicExpiryBars, j)
+
+                        j -= 1
+
+                    box.delete(oldZone)
+
+                array.remove(breakoutSupplyHighs, i)
+                array.remove(breakoutSupplyLows, i)
+                array.remove(breakoutSupplyBars, i)
+                array.remove(breakoutSupplyCandidateBars, i)
+
+            else if close <= candidateHigh
+                array.remove(breakoutSupplyHighs, i)
+                array.remove(breakoutSupplyLows, i)
+                array.remove(breakoutSupplyBars, i)
+                array.remove(breakoutSupplyCandidateBars, i)
+
+        i -= 1
+
+// DEMAND: POST-BREAKOUT FOLLOW-THROUGH VALIDATION
+if barstate.isconfirmed and array.size(breakoutDemandLows) > 0
+    i = array.size(breakoutDemandLows) - 1
+
+    while i >= 0
+        candidateHigh = array.get(breakoutDemandHighs, i)
+        candidateLow = array.get(breakoutDemandLows, i)
+        breakoutBar = array.get(breakoutDemandBars, i)
+        candidateBar = array.get(breakoutDemandCandidateBars, i)
+
+        if bar_index > breakoutBar
+            if high < candidateLow
+                zone = box.new(candidateBar, candidateHigh, candidateBar + zoneWidth, candidateLow, border_color=demandBorderColor, border_style=demandLineStyle, bgcolor=demandFillColor)
+
+                nextZoneId += 1
+                zoneId = nextZoneId
+
+                array.push(demandZones, zone)
+                array.push(demandZoneIds, zoneId)
+
+                if dynamicRectangleSize
+                    array.push(dynamicBoxes, zone)
+                    array.push(dynamicZoneIds, zoneId)
+                    array.push(dynamicStartBars, bar_index)
+                    array.push(dynamicExpiryBars, bar_index + dynamicTapWindow)
+
+                // Enforce maximum demand zones and remove matching tracking by ID
+                if array.size(demandZones) > maxZones
+                    oldZone = array.shift(demandZones)
+                    oldZoneId = array.shift(demandZoneIds)
+
+                    j = array.size(dynamicZoneIds) - 1
+
+                    while j >= 0
+                        if array.get(dynamicZoneIds, j) == oldZoneId
+                            array.remove(dynamicBoxes, j)
+                            array.remove(dynamicZoneIds, j)
+                            array.remove(dynamicStartBars, j)
+                            array.remove(dynamicExpiryBars, j)
+
+                        j -= 1
+
+                    box.delete(oldZone)
+
+                array.remove(breakoutDemandHighs, i)
+                array.remove(breakoutDemandLows, i)
+                array.remove(breakoutDemandBars, i)
+                array.remove(breakoutDemandCandidateBars, i)
+
+            else if close >= candidateLow
+                array.remove(breakoutDemandHighs, i)
+                array.remove(breakoutDemandLows, i)
+                array.remove(breakoutDemandBars, i)
+                array.remove(breakoutDemandCandidateBars, i)
+
+        i -= 1

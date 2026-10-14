@@ -1,0 +1,29 @@
+// DYNAMIC RECTANGLE SIZE
+if barstate.isconfirmed and dynamicRectangleSize and array.size(dynamicBoxes) > 0
+    i = array.size(dynamicBoxes) - 1
+
+    while i >= 0
+        zone = array.get(dynamicBoxes, i)
+        startBar = array.get(dynamicStartBars, i)
+        expiryBar = array.get(dynamicExpiryBars, i)
+
+        if bar_index > startBar
+            zoneTop = box.get_top(zone)
+            zoneBottom = box.get_bottom(zone)
+
+            tapped = high >= zoneBottom and low <= zoneTop
+
+            if tapped
+                box.set_right(zone, bar_index)
+
+                array.remove(dynamicBoxes, i)
+                array.remove(dynamicZoneIds, i)
+                array.remove(dynamicStartBars, i)
+                array.remove(dynamicExpiryBars, i)
+            else if bar_index >= expiryBar
+                array.remove(dynamicBoxes, i)
+                array.remove(dynamicZoneIds, i)
+                array.remove(dynamicStartBars, i)
+                array.remove(dynamicExpiryBars, i)
+
+        i -= 1

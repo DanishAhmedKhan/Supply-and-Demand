@@ -1,4 +1,4 @@
-//@version=5
+ //@version=5
 indicator("Supply & Demand Zones", overlay=true, max_boxes_count=500)
 
 // Settings
@@ -18,6 +18,13 @@ supplyFillColor = input.color(color.new(color.red, 80), "Supply Fill Color")
 supplyBorderColor = input.color(color.red, "Supply Border Color")
 supplyBorderStyle = input.string("Solid", "Supply Border Style", options=["Solid", "Dashed", "Dotted"])
 
+// Candle directions
+bullish = close > open
+bearish = close < open
+
+// Convert border style setting to Pine Script line style
+supplyLineStyle = supplyBorderStyle == "Dashed" ? line.style_dashed : supplyBorderStyle == "Dotted" ? line.style_dotted : line.style_solid
+demandLineStyle = demandBorderStyle == "Dashed" ? line.style_dashed : demandBorderStyle == "Dotted" ? line.style_dotted : line.style_solid
 // Confirmed zones and their unique IDs
 var box[] demandZones = array.new_box()
 var int[] demandZoneIds = array.new_int()
@@ -54,15 +61,6 @@ var float[] breakoutDemandHighs = array.new_float()
 var float[] breakoutDemandLows = array.new_float()
 var int[] breakoutDemandBars = array.new_int()
 var int[] breakoutDemandCandidateBars = array.new_int()
-
-// Candle directions
-bullish = close > open
-bearish = close < open
-
-// Convert border style setting to Pine Script line style
-supplyLineStyle = supplyBorderStyle == "Dashed" ? line.style_dashed : supplyBorderStyle == "Dotted" ? line.style_dotted : line.style_solid
-demandLineStyle = demandBorderStyle == "Dashed" ? line.style_dashed : demandBorderStyle == "Dotted" ? line.style_dotted : line.style_solid
-
 // DYNAMIC RECTANGLE SIZE
 if barstate.isconfirmed and dynamicRectangleSize and array.size(dynamicBoxes) > 0
     i = array.size(dynamicBoxes) - 1
@@ -140,7 +138,6 @@ if barstate.isconfirmed
         array.push(pendingDemandHighs, high)
         array.push(pendingDemandLows, low)
         array.push(pendingDemandBars, bar_index)
-
 // SUPPLY: WAIT FOR UPSIDE BREAKOUT
 if barstate.isconfirmed and array.size(pendingSupplyHighs) > 0
     i = array.size(pendingSupplyHighs) - 1
@@ -168,6 +165,32 @@ if barstate.isconfirmed and array.size(pendingSupplyHighs) > 0
 
         i -= 1
 
+// DEMAND: WAIT FOR DOWNSIDE BREAKOUT
+if barstate.isconfirmed and array.size(pendingDemandHighs) > 0
+    i = array.size(pendingDemandHighs) - 1
+
+    while i >= 0
+        candidateHigh = array.get(pendingDemandHighs, i)
+        candidateLow = array.get(pendingDemandLows, i)
+        candidateBar = array.get(pendingDemandBars, i)
+
+        if bar_index > candidateBar
+            if close < candidateLow
+                array.push(breakoutDemandHighs, candidateHigh)
+                array.push(breakoutDemandLows, candidateLow)
+                array.push(breakoutDemandBars, bar_index)
+                array.push(breakoutDemandCandidateBars, candidateBar)
+
+                array.remove(pendingDemandHighs, i)
+                array.remove(pendingDemandLows, i)
+                array.remove(pendingDemandBars, i)
+
+            else if close > candidateHigh
+                array.remove(pendingDemandHighs, i)
+                array.remove(pendingDemandLows, i)
+                array.remove(pendingDemandBars, i)
+
+        i -= 1
 // SUPPLY: POST-BREAKOUT FOLLOW-THROUGH VALIDATION
 if barstate.isconfirmed and array.size(breakoutSupplyHighs) > 0
     i = array.size(breakoutSupplyHighs) - 1
@@ -222,33 +245,6 @@ if barstate.isconfirmed and array.size(breakoutSupplyHighs) > 0
                 array.remove(breakoutSupplyLows, i)
                 array.remove(breakoutSupplyBars, i)
                 array.remove(breakoutSupplyCandidateBars, i)
-
-        i -= 1
-
-// DEMAND: WAIT FOR DOWNSIDE BREAKOUT
-if barstate.isconfirmed and array.size(pendingDemandHighs) > 0
-    i = array.size(pendingDemandHighs) - 1
-
-    while i >= 0
-        candidateHigh = array.get(pendingDemandHighs, i)
-        candidateLow = array.get(pendingDemandLows, i)
-        candidateBar = array.get(pendingDemandBars, i)
-
-        if bar_index > candidateBar
-            if close < candidateLow
-                array.push(breakoutDemandHighs, candidateHigh)
-                array.push(breakoutDemandLows, candidateLow)
-                array.push(breakoutDemandBars, bar_index)
-                array.push(breakoutDemandCandidateBars, candidateBar)
-
-                array.remove(pendingDemandHighs, i)
-                array.remove(pendingDemandLows, i)
-                array.remove(pendingDemandBars, i)
-
-            else if close > candidateHigh
-                array.remove(pendingDemandHighs, i)
-                array.remove(pendingDemandLows, i)
-                array.remove(pendingDemandBars, i)
 
         i -= 1
 

@@ -1,0 +1,53 @@
+// SUPPLY: WAIT FOR UPSIDE BREAKOUT
+if barstate.isconfirmed and array.size(pendingSupplyHighs) > 0
+    i = array.size(pendingSupplyHighs) - 1
+
+    while i >= 0
+        candidateHigh = array.get(pendingSupplyHighs, i)
+        candidateLow = array.get(pendingSupplyLows, i)
+        candidateBar = array.get(pendingSupplyBars, i)
+
+        if bar_index > candidateBar
+            if close > candidateHigh
+                array.push(breakoutSupplyHighs, candidateHigh)
+                array.push(breakoutSupplyLows, candidateLow)
+                array.push(breakoutSupplyBars, bar_index)
+                array.push(breakoutSupplyCandidateBars, candidateBar)
+
+                array.remove(pendingSupplyHighs, i)
+                array.remove(pendingSupplyLows, i)
+                array.remove(pendingSupplyBars, i)
+
+            else if close < candidateLow
+                array.remove(pendingSupplyHighs, i)
+                array.remove(pendingSupplyLows, i)
+                array.remove(pendingSupplyBars, i)
+
+        i -= 1
+
+// DEMAND: WAIT FOR DOWNSIDE BREAKOUT
+if barstate.isconfirmed and array.size(pendingDemandHighs) > 0
+    i = array.size(pendingDemandHighs) - 1
+
+    while i >= 0
+        candidateHigh = array.get(pendingDemandHighs, i)
+        candidateLow = array.get(pendingDemandLows, i)
+        candidateBar = array.get(pendingDemandBars, i)
+
+        if bar_index > candidateBar
+            if close < candidateLow
+                array.push(breakoutDemandHighs, candidateHigh)
+                array.push(breakoutDemandLows, candidateLow)
+                array.push(breakoutDemandBars, bar_index)
+                array.push(breakoutDemandCandidateBars, candidateBar)
+
+                array.remove(pendingDemandHighs, i)
+                array.remove(pendingDemandLows, i)
+                array.remove(pendingDemandBars, i)
+
+            else if close > candidateHigh
+                array.remove(pendingDemandHighs, i)
+                array.remove(pendingDemandLows, i)
+                array.remove(pendingDemandBars, i)
+
+        i -= 1

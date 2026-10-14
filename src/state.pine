@@ -1,0 +1,36 @@
+// Confirmed zones and their unique IDs
+var box[] demandZones = array.new_box()
+var int[] demandZoneIds = array.new_int()
+
+var box[] supplyZones = array.new_box()
+var int[] supplyZoneIds = array.new_int()
+
+var int nextZoneId = 0
+
+// Dynamic rectangle tracking
+var box[] dynamicBoxes = array.new_box()
+var int[] dynamicZoneIds = array.new_int()
+var int[] dynamicStartBars = array.new_int()
+var int[] dynamicExpiryBars = array.new_int()
+
+// Pending supply candidates
+var float[] pendingSupplyHighs = array.new_float()
+var float[] pendingSupplyLows = array.new_float()
+var int[] pendingSupplyBars = array.new_int()
+
+// Supply candidates awaiting post-breakout confirmation
+var float[] breakoutSupplyHighs = array.new_float()
+var float[] breakoutSupplyLows = array.new_float()
+var int[] breakoutSupplyBars = array.new_int()
+var int[] breakoutSupplyCandidateBars = array.new_int()
+
+// Pending demand candidates
+var float[] pendingDemandHighs = array.new_float()
+var float[] pendingDemandLows = array.new_float()
+var int[] pendingDemandBars = array.new_int()
+
+// Demand candidates awaiting post-breakout confirmation
+var float[] breakoutDemandHighs = array.new_float()
+var float[] breakoutDemandLows = array.new_float()
+var int[] breakoutDemandBars = array.new_int()
+var int[] breakoutDemandCandidateBars = array.new_int()

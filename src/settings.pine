@@ -1,0 +1,24 @@
+// Settings
+showDemand = input.bool(true, "Show Demand Zones")
+showSupply = input.bool(true, "Show Supply Zones")
+zoneWidth = input.int(20, "Zone Width (Candles)", minval=1, maxval=500)
+maxZones = input.int(50, "Maximum Zones Per Type", minval=1, maxval=200)
+dynamicRectangleSize = input.bool(false, "Dynamic Rectangle Size")
+dynamicTapWindow = input.int(100, "Dynamic Tap Window (Candles)", minval=1, maxval=5000)
+
+// Rectangle styling
+demandFillColor = input.color(color.new(color.green, 80), "Demand Fill Color")
+demandBorderColor = input.color(color.green, "Demand Border Color")
+demandBorderStyle = input.string("Solid", "Demand Border Style", options=["Solid", "Dashed", "Dotted"])
+
+supplyFillColor = input.color(color.new(color.red, 80), "Supply Fill Color")
+supplyBorderColor = input.color(color.red, "Supply Border Color")
+supplyBorderStyle = input.string("Solid", "Supply Border Style", options=["Solid", "Dashed", "Dotted"])
+
+// Candle directions
+bullish = close > open
+bearish = close < open
+
+// Convert border style setting to Pine Script line style
+supplyLineStyle = supplyBorderStyle == "Dashed" ? line.style_dashed : supplyBorderStyle == "Dotted" ? line.style_dotted : line.style_solid
+demandLineStyle = demandBorderStyle == "Dashed" ? line.style_dashed : demandBorderStyle == "Dotted" ? line.style_dotted : line.style_solid

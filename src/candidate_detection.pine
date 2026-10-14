@@ -1,0 +1,48 @@
+
+// REGISTER CANDIDATES AND APPLY MIRRORED REPLACEMENT RULES
+if barstate.isconfirmed
+    // SUPPLY: bearish candles
+    if showSupply and bearish
+        i = array.size(pendingSupplyHighs) - 1
+
+        while i >= 0
+            oldHigh = array.get(pendingSupplyHighs, i)
+            oldLow = array.get(pendingSupplyLows, i)
+
+            wickAbove = high > oldHigh
+            wickBelow = low < oldLow
+            insideOldZone = high <= oldHigh and low >= oldLow
+
+            if wickAbove or wickBelow or insideOldZone
+                array.remove(pendingSupplyHighs, i)
+                array.remove(pendingSupplyLows, i)
+                array.remove(pendingSupplyBars, i)
+
+            i -= 1
+
+        array.push(pendingSupplyHighs, high)
+        array.push(pendingSupplyLows, low)
+        array.push(pendingSupplyBars, bar_index)
+
+    // DEMAND: bullish candles
+    if showDemand and bullish
+        i = array.size(pendingDemandHighs) - 1
+
+        while i >= 0
+            oldHigh = array.get(pendingDemandHighs, i)
+            oldLow = array.get(pendingDemandLows, i)
+
+            wickBelow = low < oldLow
+            wickAbove = high > oldHigh
+            insideOldZone = high <= oldHigh and low >= oldLow
+
+            if wickBelow or wickAbove or insideOldZone
+                array.remove(pendingDemandHighs, i)
+                array.remove(pendingDemandLows, i)
+                array.remove(pendingDemandBars, i)
+
+            i -= 1
+
+        array.push(pendingDemandHighs, high)
+        array.push(pendingDemandLows, low)
+        array.push(pendingDemandBars, bar_index)
