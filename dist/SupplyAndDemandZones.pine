@@ -61,6 +61,16 @@ var float[] breakoutDemandHighs = array.new_float()
 var float[] breakoutDemandLows = array.new_float()
 var int[] breakoutDemandBars = array.new_int()
 var int[] breakoutDemandCandidateBars = array.new_int()
+
+// Supply bearish retest candles
+var float[] breakoutSupplyBearishHighs = array.new_float()
+var float[] breakoutSupplyBearishLows = array.new_float()
+var int[] breakoutSupplyBearishBars = array.new_int()
+
+// Demand bullish retest candles
+var float[] breakoutDemandBullishHighs = array.new_float()
+var float[] breakoutDemandBullishLows = array.new_float()
+var int[] breakoutDemandBullishBars = array.new_int()
 // DYNAMIC RECTANGLE SIZE
 if barstate.isconfirmed and dynamicRectangleSize and array.size(dynamicBoxes) > 0
     i = array.size(dynamicBoxes) - 1
@@ -90,7 +100,6 @@ if barstate.isconfirmed and dynamicRectangleSize and array.size(dynamicBoxes) > 
                 array.remove(dynamicExpiryBars, i)
 
         i -= 1
-
 // REGISTER CANDIDATES AND APPLY MIRRORED REPLACEMENT RULES
 if barstate.isconfirmed
     // SUPPLY: bearish candles
@@ -154,6 +163,10 @@ if barstate.isconfirmed and array.size(pendingSupplyHighs) > 0
                 array.push(breakoutSupplyBars, bar_index)
                 array.push(breakoutSupplyCandidateBars, candidateBar)
 
+                array.push(breakoutSupplyBearishHighs, na)
+                array.push(breakoutSupplyBearishLows, na)
+                array.push(breakoutSupplyBearishBars, na)
+
                 array.remove(pendingSupplyHighs, i)
                 array.remove(pendingSupplyLows, i)
                 array.remove(pendingSupplyBars, i)
@@ -181,6 +194,10 @@ if barstate.isconfirmed and array.size(pendingDemandHighs) > 0
                 array.push(breakoutDemandBars, bar_index)
                 array.push(breakoutDemandCandidateBars, candidateBar)
 
+                array.push(breakoutDemandBullishHighs, na)
+                array.push(breakoutDemandBullishLows, na)
+                array.push(breakoutDemandBullishBars, na)
+
                 array.remove(pendingDemandHighs, i)
                 array.remove(pendingDemandLows, i)
                 array.remove(pendingDemandBars, i)
@@ -191,7 +208,8 @@ if barstate.isconfirmed and array.size(pendingDemandHighs) > 0
                 array.remove(pendingDemandBars, i)
 
         i -= 1
-// SUPPLY: POST-BREAKOUT FOLLOW-THROUGH VALIDATION
+
+ // SUPPLY: POST-BREAKOUT FOLLOW-THROUGH VALIDATION
 if barstate.isconfirmed and array.size(breakoutSupplyHighs) > 0
     i = array.size(breakoutSupplyHighs) - 1
 
@@ -202,51 +220,96 @@ if barstate.isconfirmed and array.size(breakoutSupplyHighs) > 0
         candidateBar = array.get(breakoutSupplyCandidateBars, i)
 
         if bar_index > breakoutBar
-            if low > candidateHigh
-                zone = box.new(candidateBar, candidateHigh, candidateBar + zoneWidth, candidateLow, border_color=supplyBorderColor, border_style=supplyLineStyle, bgcolor=supplyFillColor)
-
-                nextZoneId += 1
-                zoneId = nextZoneId
-
-                array.push(supplyZones, zone)
-                array.push(supplyZoneIds, zoneId)
-
-                if dynamicRectangleSize
-                    array.push(dynamicBoxes, zone)
-                    array.push(dynamicZoneIds, zoneId)
-                    array.push(dynamicStartBars, bar_index)
-                    array.push(dynamicExpiryBars, bar_index + dynamicTapWindow)
-
-                // Enforce maximum supply zones and remove matching tracking by ID
-                if array.size(supplyZones) > maxZones
-                    oldZone = array.shift(supplyZones)
-                    oldZoneId = array.shift(supplyZoneIds)
-
-                    j = array.size(dynamicZoneIds) - 1
-
-                    while j >= 0
-                        if array.get(dynamicZoneIds, j) == oldZoneId
-                            array.remove(dynamicBoxes, j)
-                            array.remove(dynamicZoneIds, j)
-                            array.remove(dynamicStartBars, j)
-                            array.remove(dynamicExpiryBars, j)
-
-                        j -= 1
-
-                    box.delete(oldZone)
-
+            // RULE 1:
+            // A close below the original candidate high invalidates it.
+            // The bearish candle remains an independent pending candidate.
+            if close < candidateHigh
                 array.remove(breakoutSupplyHighs, i)
                 array.remove(breakoutSupplyLows, i)
                 array.remove(breakoutSupplyBars, i)
                 array.remove(breakoutSupplyCandidateBars, i)
+                array.remove(breakoutSupplyBearishHighs, i)
+                array.remove(breakoutSupplyBearishLows, i)
+                array.remove(breakoutSupplyBearishBars, i)
 
-            else if close <= candidateHigh
-                array.remove(breakoutSupplyHighs, i)
-                array.remove(breakoutSupplyLows, i)
-                array.remove(breakoutSupplyBars, i)
-                array.remove(breakoutSupplyCandidateBars, i)
+            // RULE 2:
+            // Price has moved completely above the original candidate.
+            else if low > candidateHigh
+                retestBar = array.get(breakoutSupplyBearishBars, i)
+
+                // A bearish retest candle was found during the search.
+                // Invalidate the original candidate; the retest candle
+                // remains a separate pending candidate.
+                if not na(retestBar)
+                    array.remove(breakoutSupplyHighs, i)
+                    array.remove(breakoutSupplyLows, i)
+                    array.remove(breakoutSupplyBars, i)
+                    array.remove(breakoutSupplyCandidateBars, i)
+                    array.remove(breakoutSupplyBearishHighs, i)
+                    array.remove(breakoutSupplyBearishLows, i)
+                    array.remove(breakoutSupplyBearishBars, i)
+
+                // No bearish retest candle was found.
+                // Confirm the original supply candidate.
+                else
+                    zone = box.new(
+                         candidateBar,
+                         candidateHigh,
+                         candidateBar + zoneWidth,
+                         candidateLow,
+                         border_color=supplyBorderColor,
+                         border_style=supplyLineStyle,
+                         bgcolor=supplyFillColor)
+
+                    nextZoneId += 1
+                    zoneId = nextZoneId
+
+                    array.push(supplyZones, zone)
+                    array.push(supplyZoneIds, zoneId)
+
+                    if dynamicRectangleSize
+                        array.push(dynamicBoxes, zone)
+                        array.push(dynamicZoneIds, zoneId)
+                        array.push(dynamicStartBars, bar_index)
+                        array.push(dynamicExpiryBars, bar_index + dynamicTapWindow)
+
+                    // Enforce maximum supply zones.
+                    if array.size(supplyZones) > maxZones
+                        oldZone = array.shift(supplyZones)
+                        oldZoneId = array.shift(supplyZoneIds)
+
+                        j = array.size(dynamicZoneIds) - 1
+
+                        while j >= 0
+                            if array.get(dynamicZoneIds, j) == oldZoneId
+                                array.remove(dynamicBoxes, j)
+                                array.remove(dynamicZoneIds, j)
+                                array.remove(dynamicStartBars, j)
+                                array.remove(dynamicExpiryBars, j)
+
+                            j -= 1
+
+                        box.delete(oldZone)
+
+                    // Remove the confirmed candidate and retest tracking.
+                    array.remove(breakoutSupplyHighs, i)
+                    array.remove(breakoutSupplyLows, i)
+                    array.remove(breakoutSupplyBars, i)
+                    array.remove(breakoutSupplyCandidateBars, i)
+                    array.remove(breakoutSupplyBearishHighs, i)
+                    array.remove(breakoutSupplyBearishLows, i)
+                    array.remove(breakoutSupplyBearishBars, i)
+
+            // RULE 3:
+            // During the search, remember the latest bearish candle
+            // whose low wicks below the original candidate high.
+            else if bearish and low < candidateHigh
+                array.set(breakoutSupplyBearishHighs, i, high)
+                array.set(breakoutSupplyBearishLows, i, low)
+                array.set(breakoutSupplyBearishBars, i, bar_index)
 
         i -= 1
+
 
 // DEMAND: POST-BREAKOUT FOLLOW-THROUGH VALIDATION
 if barstate.isconfirmed and array.size(breakoutDemandLows) > 0
@@ -259,48 +322,92 @@ if barstate.isconfirmed and array.size(breakoutDemandLows) > 0
         candidateBar = array.get(breakoutDemandCandidateBars, i)
 
         if bar_index > breakoutBar
-            if high < candidateLow
-                zone = box.new(candidateBar, candidateHigh, candidateBar + zoneWidth, candidateLow, border_color=demandBorderColor, border_style=demandLineStyle, bgcolor=demandFillColor)
-
-                nextZoneId += 1
-                zoneId = nextZoneId
-
-                array.push(demandZones, zone)
-                array.push(demandZoneIds, zoneId)
-
-                if dynamicRectangleSize
-                    array.push(dynamicBoxes, zone)
-                    array.push(dynamicZoneIds, zoneId)
-                    array.push(dynamicStartBars, bar_index)
-                    array.push(dynamicExpiryBars, bar_index + dynamicTapWindow)
-
-                // Enforce maximum demand zones and remove matching tracking by ID
-                if array.size(demandZones) > maxZones
-                    oldZone = array.shift(demandZones)
-                    oldZoneId = array.shift(demandZoneIds)
-
-                    j = array.size(dynamicZoneIds) - 1
-
-                    while j >= 0
-                        if array.get(dynamicZoneIds, j) == oldZoneId
-                            array.remove(dynamicBoxes, j)
-                            array.remove(dynamicZoneIds, j)
-                            array.remove(dynamicStartBars, j)
-                            array.remove(dynamicExpiryBars, j)
-
-                        j -= 1
-
-                    box.delete(oldZone)
-
+            // RULE 1:
+            // A close above the original candidate low invalidates it.
+            // The bullish candle remains an independent pending candidate.
+            if close > candidateLow
                 array.remove(breakoutDemandHighs, i)
                 array.remove(breakoutDemandLows, i)
                 array.remove(breakoutDemandBars, i)
                 array.remove(breakoutDemandCandidateBars, i)
+                array.remove(breakoutDemandBullishHighs, i)
+                array.remove(breakoutDemandBullishLows, i)
+                array.remove(breakoutDemandBullishBars, i)
 
-            else if close >= candidateLow
-                array.remove(breakoutDemandHighs, i)
-                array.remove(breakoutDemandLows, i)
-                array.remove(breakoutDemandBars, i)
-                array.remove(breakoutDemandCandidateBars, i)
+            // RULE 2:
+            // Price has moved completely below the original candidate.
+            else if high < candidateLow
+                retestBar = array.get(breakoutDemandBullishBars, i)
+
+                // A bullish retest candle was found during the search.
+                // Invalidate the original candidate; the retest candle
+                // remains a separate pending candidate.
+                if not na(retestBar)
+                    array.remove(breakoutDemandHighs, i)
+                    array.remove(breakoutDemandLows, i)
+                    array.remove(breakoutDemandBars, i)
+                    array.remove(breakoutDemandCandidateBars, i)
+                    array.remove(breakoutDemandBullishHighs, i)
+                    array.remove(breakoutDemandBullishLows, i)
+                    array.remove(breakoutDemandBullishBars, i)
+
+                // No bullish retest candle was found.
+                // Confirm the original demand candidate.
+                else
+                    zone = box.new(
+                         candidateBar,
+                         candidateHigh,
+                         candidateBar + zoneWidth,
+                         candidateLow,
+                         border_color=demandBorderColor,
+                         border_style=demandLineStyle,
+                         bgcolor=demandFillColor)
+
+                    nextZoneId += 1
+                    zoneId = nextZoneId
+
+                    array.push(demandZones, zone)
+                    array.push(demandZoneIds, zoneId)
+
+                    if dynamicRectangleSize
+                        array.push(dynamicBoxes, zone)
+                        array.push(dynamicZoneIds, zoneId)
+                        array.push(dynamicStartBars, bar_index)
+                        array.push(dynamicExpiryBars, bar_index + dynamicTapWindow)
+
+                    // Enforce maximum demand zones.
+                    if array.size(demandZones) > maxZones
+                        oldZone = array.shift(demandZones)
+                        oldZoneId = array.shift(demandZoneIds)
+
+                        j = array.size(dynamicZoneIds) - 1
+
+                        while j >= 0
+                            if array.get(dynamicZoneIds, j) == oldZoneId
+                                array.remove(dynamicBoxes, j)
+                                array.remove(dynamicZoneIds, j)
+                                array.remove(dynamicStartBars, j)
+                                array.remove(dynamicExpiryBars, j)
+
+                            j -= 1
+
+                        box.delete(oldZone)
+
+                    // Remove the confirmed candidate and retest tracking.
+                    array.remove(breakoutDemandHighs, i)
+                    array.remove(breakoutDemandLows, i)
+                    array.remove(breakoutDemandBars, i)
+                    array.remove(breakoutDemandCandidateBars, i)
+                    array.remove(breakoutDemandBullishHighs, i)
+                    array.remove(breakoutDemandBullishLows, i)
+                    array.remove(breakoutDemandBullishBars, i)
+
+            // RULE 3:
+            // During the search, remember the latest bullish candle
+            // whose high wicks above the original candidate low.
+            else if bullish and high > candidateLow
+                array.set(breakoutDemandBullishHighs, i, high)
+                array.set(breakoutDemandBullishLows, i, low)
+                array.set(breakoutDemandBullishBars, i, bar_index)
 
         i -= 1

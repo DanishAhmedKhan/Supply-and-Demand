@@ -1,4 +1,4 @@
-# Supply and Demand Indicator for TradingView
+# Supply & Demand Zones Indicator for TradingView
 
 A custom **Pine Script** indicator designed for TradingView to automatically identify and plot key supply and demand zones on your charts.
 

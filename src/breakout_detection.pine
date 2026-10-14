@@ -14,6 +14,10 @@ if barstate.isconfirmed and array.size(pendingSupplyHighs) > 0
                 array.push(breakoutSupplyBars, bar_index)
                 array.push(breakoutSupplyCandidateBars, candidateBar)
 
+                array.push(breakoutSupplyBearishHighs, na)
+                array.push(breakoutSupplyBearishLows, na)
+                array.push(breakoutSupplyBearishBars, na)
+
                 array.remove(pendingSupplyHighs, i)
                 array.remove(pendingSupplyLows, i)
                 array.remove(pendingSupplyBars, i)
@@ -40,6 +44,10 @@ if barstate.isconfirmed and array.size(pendingDemandHighs) > 0
                 array.push(breakoutDemandLows, candidateLow)
                 array.push(breakoutDemandBars, bar_index)
                 array.push(breakoutDemandCandidateBars, candidateBar)
+
+                array.push(breakoutDemandBullishHighs, na)
+                array.push(breakoutDemandBullishLows, na)
+                array.push(breakoutDemandBullishBars, na)
 
                 array.remove(pendingDemandHighs, i)
                 array.remove(pendingDemandLows, i)

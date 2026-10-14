@@ -1,4 +1,3 @@
-
 // REGISTER CANDIDATES AND APPLY MIRRORED REPLACEMENT RULES
 if barstate.isconfirmed
     // SUPPLY: bearish candles

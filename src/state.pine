@@ -34,3 +34,13 @@ var float[] breakoutDemandHighs = array.new_float()
 var float[] breakoutDemandLows = array.new_float()
 var int[] breakoutDemandBars = array.new_int()
 var int[] breakoutDemandCandidateBars = array.new_int()
+
+// Supply bearish retest candles
+var float[] breakoutSupplyBearishHighs = array.new_float()
+var float[] breakoutSupplyBearishLows = array.new_float()
+var int[] breakoutSupplyBearishBars = array.new_int()
+
+// Demand bullish retest candles
+var float[] breakoutDemandBullishHighs = array.new_float()
+var float[] breakoutDemandBullishLows = array.new_float()
+var int[] breakoutDemandBullishBars = array.new_int()
